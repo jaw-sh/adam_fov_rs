@@ -18,24 +18,24 @@ fn main() {
 fn setup(mut commands: Commands) {
     let size = [35, 35];
     commands
-        .spawn_bundle(TerminalBundle::new().with_size(size))
+        .spawn(TerminalBundle::new().with_size(size))
         .insert(AutoCamera)
         .insert(ToWorld::default());
 
-    let mut map = VisibilityMap2d::default(size);
+    let mut map = VisibilityMap2dGrid::default(size);
     place_walls(&mut map);
-    commands.insert_resource(map);
+    commands.insert_resource(VisibilityMap2d { grid: map });
 
     commands.insert_resource(CursorPos::default());
     commands.insert_resource(ViewRange(5));
 }
 
-fn place_walls(map: &mut VisibilityMap2d) {
+fn place_walls(grid: &mut VisibilityMap2dGrid) {
     let mut rng = rand::thread_rng();
     for _ in 0..100 {
-        let x = rng.gen_range(0..map.width());
-        let y = rng.gen_range(0..map.height());
-        map[[x, y]].opaque = true;
+        let x = rng.gen_range(0..grid.width());
+        let y = rng.gen_range(0..grid.height());
+        grid[[x, y]].opaque = true;
     }
 }
 
@@ -53,9 +53,9 @@ fn update_cursor_pos(
                     let pos = pos.round().as_ivec2();
                     if cursor_pos.0 != pos || view_range.is_changed() {
                         cursor_pos.0 = pos;
-                        map.clear_visible();
-                        let pos = map.world_to_grid(pos);
-                        fov::compute(pos, view_range.0, &mut *map);
+                        map.grid.clear_visible();
+                        let pos = map.grid.transform_wtl(pos);
+                        fov::compute(pos, view_range.0, &mut map.grid);
                     }
                 }
             }
@@ -70,14 +70,15 @@ fn toggle_walls(
 ) {
     if mouse.just_pressed(MouseButton::Left) {
         let p = cursor_pos.0;
-        let p = map.world_to_grid(p);
-        if map.is_in_bounds(p) {
-            let p = &mut map[p].opaque;
+        let p = map.grid.transform_wtl(p);
+        if map.grid.is_in_bounds(p) {
+            let p = &mut map.grid[p].opaque;
             *p = !*p;
         }
     }
 }
 
+#[derive(Resource)]
 struct ViewRange(i32);
 fn update_view_range(mut view_range: ResMut<ViewRange>, mut scroll_event: EventReader<MouseWheel>) {
     for ev in scroll_event.iter() {
@@ -99,8 +100,8 @@ fn update_terminal_from_map(map: Res<VisibilityMap2d>, mut q_term: Query<&mut Te
 
         for x in 0..term.width() as i32 {
             for y in 0..term.height() as i32 {
-                if map[[x, y]].visible {
-                    if map[[x, y]].opaque {
+                if map.grid[[x, y]].visible {
+                    if map.grid[[x, y]].opaque {
                         term.put_char([x, y], '#'.fg(Color::GREEN));
                     } else {
                         term.put_char([x, y], '.'.fg(Color::WHITE));
@@ -114,5 +115,5 @@ fn update_terminal_from_map(map: Res<VisibilityMap2d>, mut q_term: Query<&mut Te
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 struct CursorPos(IVec2);

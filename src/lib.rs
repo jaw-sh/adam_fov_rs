@@ -20,7 +20,7 @@
 //!
 //! // Compute our visible tiles and add them to the map
 //! fov::compute([15,14], 5, &mut map);
-//!
+//!32
 //! // The space directly above our opaque tile is not visible
 //! assert!(map[[15,16]].visible == false);
 //! ```
@@ -32,8 +32,14 @@ pub use glam::IVec2;
 use glam::Vec2;
 use sark_grids::Grid;
 pub use sark_grids::GridPoint;
+use bevy::ecs::system::Resource;
 
-pub type VisibilityMap2d = Grid<VisibilityPoint>;
+#[derive(Resource)]
+pub struct VisibilityMap2d {
+    pub grid: VisibilityMap2dGrid
+}
+
+pub type VisibilityMap2dGrid = Grid<VisibilityPoint>;
 
 /// A trait used by the fov algorithm to calculate the resulting fov.
 pub trait VisibilityMap {
@@ -49,7 +55,7 @@ pub struct VisibilityPoint {
     pub opaque: bool,
 }
 
-impl VisibilityMap for VisibilityMap2d {
+impl VisibilityMap for VisibilityMap2dGrid {
     fn is_opaque(&self, p: impl GridPoint) -> bool {
         if self.in_bounds(p) {
             self[p].opaque
@@ -80,14 +86,14 @@ pub trait VisibilityMapUtility {
     fn clear_visible(&mut self);
 }
 
-impl VisibilityMapUtility for VisibilityMap2d {
+impl VisibilityMapUtility for VisibilityMap2dGrid {
     fn toggle_opaque(&mut self, p: impl GridPoint) {
-        let i = self.pos_to_index(p);
+        let i = self.transform_lti(p);
         self[i].opaque = !self[i].opaque;
     }
 
     fn toggle_visible(&mut self, p: impl GridPoint) {
-        let i = self.pos_to_index(p);
+        let i = self.transform_lti(p);
         self[i].visible = !self[i].visible;
     }
 
@@ -417,7 +423,7 @@ mod test {
 
     #[test]
     fn test_fov() {
-        let mut map = VisibilityMap2d::default([30, 30]);
+        let mut map = VisibilityMap2dGrid::default([30, 30]);
         map[[0, 1]].opaque = true;
         map[[1, 0]].opaque = true;
         fov::compute([0, 0], 5, &mut map);
